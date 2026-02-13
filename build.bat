@@ -17,6 +17,14 @@ cl /nologo /O2 neon_main.c neon_upper.obj /Fe:neon_demo.exe
 if errorlevel 1 goto :fail
 popd
 
+echo === Building pure asm demo ===
+pushd pure_asm
+armasm64 -nologo hello.asm -o hello.obj
+if errorlevel 1 goto :fail
+link /nologo /entry:mainCRTStartup /subsystem:console hello.obj kernel32.lib /out:hello.exe
+if errorlevel 1 goto :fail
+popd
+
 echo === All builds succeeded ===
 goto :eof
 :fail
