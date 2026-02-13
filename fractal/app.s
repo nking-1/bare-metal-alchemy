@@ -284,6 +284,18 @@ _main:
     add     x3, x3, _enc_event@PAGEOFF  // "v@:@"
     bl      _class_addMethod
 
+    // applicationShouldTerminateAfterLastWindowClosed:
+    adrp    x0, _str_appShouldTerminate@PAGE
+    add     x0, x0, _str_appShouldTerminate@PAGEOFF
+    bl      _sel_registerName
+    mov     x1, x0
+    mov     x0, x25                     // cls
+    adrp    x2, _ad_shouldTerminateAfterLastWindowClosed@PAGE
+    add     x2, x2, _ad_shouldTerminateAfterLastWindowClosed@PAGEOFF
+    adrp    x3, _enc_bool_obj@PAGE
+    add     x3, x3, _enc_bool_obj@PAGEOFF
+    bl      _class_addMethod
+
     // Register class
     mov     x0, x25
     bl      _objc_registerClassPair

@@ -146,6 +146,8 @@ _str_keyDown:                               .asciz "keyDown:"
 _str_timerFired:                            .asciz "timerFired:"
 .globl _str_applicationDidFinishLaunching
 _str_applicationDidFinishLaunching:         .asciz "applicationDidFinishLaunching:"
+.globl _str_appShouldTerminate
+_str_appShouldTerminate:                    .asciz "applicationShouldTerminateAfterLastWindowClosed:"
 .globl _str_terminate
 _str_terminate:                             .asciz "terminate:"
 
@@ -204,6 +206,10 @@ _enc_event:                 .asciz "v@:@"
 // BOOL method(id self, SEL _cmd)  — char return
 .globl _enc_bool
 _enc_bool:                  .asciz "c@:"
+
+// BOOL method(id self, SEL _cmd, id arg)  — char return, one object param
+.globl _enc_bool_obj
+_enc_bool_obj:              .asciz "c@:@"
 
 // void method(id self, SEL _cmd)
 .globl _enc_void

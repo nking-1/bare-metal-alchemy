@@ -383,10 +383,7 @@ _fv_mouseDown:
     add     x8, x8, _g_state@PAGEOFF
 
     fcvtzs  w9, d0                      // mouse x (int)
-    ldr     w10, [x8, #VS_WIN_H]
-    ucvtf   d2, w10
-    fsub    d1, d2, d1                  // flip Y
-    fcvtzs  w10, d1                     // mouse y (int)
+    fcvtzs  w10, d1                     // mouse y (int, raw Cocoa coords)
 
     // Set dragging state
     mov     w11, #1
@@ -443,12 +440,7 @@ _fv_mouseDragged:
     mov     x0, x19
     bl      _objc_msgSend               // d0=cocoa_x, d1=cocoa_y
 
-    // Flip Y
-    ldr     w8, [x20, #VS_WIN_H]
-    ucvtf   d2, w8
-    fsub    d1, d2, d1                  // screen_y = win_h - cocoa_y
-
-    // Current mouse pos as int
+    // Current mouse pos as int (raw Cocoa coords — flip cancels in delta)
     fcvtzs  w9, d0                      // mx
     fcvtzs  w10, d1                     // my
 
@@ -830,6 +822,16 @@ _fv_keyDown:
 .Lkey_done:
     ldp     x19, x20, [x29, #16]
     ldp     x29, x30, [sp], #48
+    ret
+
+
+// ══════════════════════════════════════════════════════════════
+//  _ad_shouldTerminateAfterLastWindowClosed — return YES
+// ══════════════════════════════════════════════════════════════
+
+.globl _ad_shouldTerminateAfterLastWindowClosed
+_ad_shouldTerminateAfterLastWindowClosed:
+    mov     w0, #1
     ret
 
 
