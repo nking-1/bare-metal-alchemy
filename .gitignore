@@ -1,0 +1,14 @@
+# Build artifacts
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# VS temp files
+*.suo
+*.user
+*.sln
+*.vcxproj*
+.vs/
