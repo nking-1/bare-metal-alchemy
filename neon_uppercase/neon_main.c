@@ -1,27 +1,28 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 
-/* Implemented in neon_upper.asm */
+/* Implemented in neon_upper.s */
 extern void neon_toupper(char *str, uint64_t len);
 extern void scalar_toupper(char *str, uint64_t len);
 
-static double seconds_between(LARGE_INTEGER start, LARGE_INTEGER end, LARGE_INTEGER freq)
+static double get_time_seconds(void)
 {
-    return (double)(end.QuadPart - start.QuadPart) / (double)freq.QuadPart;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
 }
 
 int main(void)
 {
     /* ── Part 1: Visual demo ── */
-    const char *demo = "Hello, World! NEON on arm64 Windows is WILD.";
+    const char *demo = "Hello, World! NEON on Apple Silicon is WILD.";
     size_t len = strlen(demo);
 
-    char *buf_scalar = _strdup(demo);
-    char *buf_neon   = _strdup(demo);
+    char *buf_scalar = strdup(demo);
+    char *buf_neon   = strdup(demo);
 
     printf("=== NEON SIMD uppercase demo ===\n\n");
     printf("  Original:  \"%s\"\n", demo);
@@ -50,43 +51,26 @@ int main(void)
     char *big_scalar = (char *)malloc(big_len);
     char *big_neon   = (char *)malloc(big_len);
 
-    LARGE_INTEGER freq, t0, t1;
-    QueryPerformanceFrequency(&freq);
-
-    /* Fill with repeating lowercase text */
-    for (size_t i = 0; i < big_len; i++)
-        big_scalar[i] = 'a' + (char)(i % 26);
-
-    /* --- Scalar timing --- */
-    QueryPerformanceCounter(&t0);
-    for (int n = 0; n < iterations; n++) {
-        memcpy(big_scalar, big_neon, big_len);  /* reset to lowercase */
-        /* Oops, need to fill big_neon first. Let me fix the order. */
-    }
-    /* Actually, let's just refill each time from a pattern. */
-    /* Simpler: time the conversion only, refill from a source buffer. */
-
+    /* Source buffer with repeating lowercase text */
     char *source = (char *)malloc(big_len);
     for (size_t i = 0; i < big_len; i++)
         source[i] = 'a' + (char)(i % 26);
 
     /* Time scalar */
-    QueryPerformanceCounter(&t0);
+    double t0 = get_time_seconds();
     for (int n = 0; n < iterations; n++) {
         memcpy(big_scalar, source, big_len);
         scalar_toupper(big_scalar, big_len);
     }
-    QueryPerformanceCounter(&t1);
-    double scalar_time = seconds_between(t0, t1, freq);
+    double scalar_time = get_time_seconds() - t0;
 
     /* Time NEON */
-    QueryPerformanceCounter(&t0);
+    t0 = get_time_seconds();
     for (int n = 0; n < iterations; n++) {
         memcpy(big_neon, source, big_len);
         neon_toupper(big_neon, big_len);
     }
-    QueryPerformanceCounter(&t1);
-    double neon_time = seconds_between(t0, t1, freq);
+    double neon_time = get_time_seconds() - t0;
 
     /* Verify results match */
     int match = (memcmp(big_scalar, big_neon, big_len) == 0);

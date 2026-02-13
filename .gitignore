@@ -1,12 +1,19 @@
 # Build artifacts
+*.o
+*.dSYM/
+
+# Executables
+sieve/primes
+neon_uppercase/neon_demo
+pure_asm/hello
+
+# Windows leftovers
 *.obj
 *.exe
 *.pdb
 *.ilk
 *.exp
 *.lib
-
-# VS temp files
 *.suo
 *.user
 *.sln
