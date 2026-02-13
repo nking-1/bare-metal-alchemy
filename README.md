@@ -72,20 +72,83 @@ Converts strings to uppercase using ARM's NEON vector engine — processing **16
 - Integer-to-ASCII conversion on the stack using `UDIV` + `MSUB` (modulo)
 - Mach-O assembly syntax differences from ELF and MSVC `armasm64`
 
+### 4. Fractal Viewer (`fractal/cocoa_viewer`)
+
+**Zero C code. Zero external dependencies.** A fully interactive Mandelbrot/Julia set viewer written entirely in AArch64 assembly, using native macOS Cocoa/AppKit via the Objective-C runtime. NEON SIMD kernels compute fractal rows in parallel using `float64x2` vectorization.
+
+```
+# Mandelbrot (default)
+./fractal/cocoa_viewer
+
+# Lightning Julia
+./fractal/cocoa_viewer -j -0.8,0.156
+
+# Seahorse valley Julia
+./fractal/cocoa_viewer -j -0.75,0.11
+
+# Spiral Julia
+./fractal/cocoa_viewer -j 0.285,0.01
+
+# Custom window size and iterations
+./fractal/cocoa_viewer -w 1280 -h 960 -i 512
+```
+
+**Controls:**
+
+| Input | Action |
+|---|---|
+| Left-click drag | Pan |
+| Scroll wheel | Zoom in/out (centered on cursor) |
+| Right-click | Switch to Julia set using clicked point as c |
+| Space | Switch back to Mandelbrot |
+| +/- | Double/halve max iterations |
+| S | Save current view as PPM |
+| R | Reset view |
+| Q / Escape | Quit |
+
+**Files:**
+- `fractal/app.s` — `_main` entry point, Cocoa bootstrap (NSApplication, NSWindow, custom NSView/AppDelegate classes created via ObjC runtime)
+- `fractal/events.s` — all event handlers (drawRect, mouse, keyboard, scroll, timer) and PPM save
+- `fractal/render.s` — compute view bounds, render fractal rows, RGB24→ARGB32 conversion (NEON `ld3`/`st4`)
+- `fractal/state.s` — global state struct, string constants, ObjC type encodings
+- `fractal/state_defs.s` — struct offset equates (`.include`d by other files)
+- `fractal/mandelbrot.s` — Mandelbrot NEON kernel (2 complex points per iteration via `float64x2`)
+- `fractal/julia.s` — Julia NEON kernel
+- `fractal/colormap.s` — HSV-based iteration-to-RGB colormap
+
+**Concepts demonstrated:**
+- Calling Objective-C from pure assembly (`objc_getClass`, `sel_registerName`, `objc_msgSend`)
+- Creating custom ObjC classes at runtime (`objc_allocateClassPair`, `class_addMethod`, `objc_registerClassPair`)
+- CGRect as a Homogeneous Floating-point Aggregate (HFA) — passed in `d0`–`d3`, not on the stack
+- CoreGraphics bitmap pipeline: `CGBitmapContextCreate` → `CGBitmapContextCreateImage` → `CGContextDrawImage`
+- Progressive rendering (coarse 1/4 res preview, then full resolution)
+- Apple ARM64 variadic calling convention (`snprintf` args on the stack)
+- Callee-saved FP register discipline (`d8`–`d15` must be preserved across calls)
+- NEON SIMD for both fractal math (`float64x2`) and pixel format conversion (`ld3`/`st4`)
+
 ## Project Structure
 
 ```
 arm_experiments/
-├── Makefile                       # build with `make`
-├── README.md                      # this file
+├── Makefile
+├── README.md
 ├── sieve/
 │   ├── sieve.s                    # Sieve of Eratosthenes — AArch64 assembly
 │   └── sieve_main.c              # C driver for sieve demo
 ├── neon_uppercase/
 │   ├── neon_upper.s               # NEON SIMD uppercase — AArch64 assembly
 │   └── neon_main.c               # C driver for NEON demo
-└── pure_asm/
-    └── hello.s                    # FizzBuzz — 100% assembly, no C at all
+├── pure_asm/
+│   └── hello.s                    # FizzBuzz — 100% assembly, no C at all
+└── fractal/
+    ├── app.s                      # Cocoa bootstrap + main entry point
+    ├── events.s                   # Event handlers (draw, mouse, keyboard)
+    ├── render.s                   # Fractal rendering + pixel conversion
+    ├── state.s                    # Global state, strings, constants
+    ├── state_defs.s               # Struct offset equates
+    ├── mandelbrot.s               # Mandelbrot NEON kernel
+    ├── julia.s                    # Julia NEON kernel
+    └── colormap.s                 # HSV colormap
 ```
 
 ## AArch64 Quick Reference
@@ -98,5 +161,5 @@ arm_experiments/
 | `x30` | Link register (return address) |
 | `xzr`/`wzr` | Hardwired zero register |
 | `v0`–`v31` | 128-bit NEON/SIMD registers |
-| `q0`–`q31` | Same registers, 128-bit name (used with `ldr`/`str`) |
+| `d8`–`d15` | Callee-saved (lower 64 bits of `v8`–`v15`) |
 | `sp` | Stack pointer (must stay 16-byte aligned) |
