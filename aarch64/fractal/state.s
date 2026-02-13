@@ -6,7 +6,7 @@
 // type encoding strings, and global pointers.
 //
 
-.include "fractal/state_defs.s"
+.include "state_defs.s"
 
 // ══════════════════════════════════════════════════════════════
 //  DATA SECTION — mutable globals

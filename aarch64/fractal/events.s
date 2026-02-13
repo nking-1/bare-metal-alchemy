@@ -6,7 +6,7 @@
 // Each receives (id self, SEL _cmd, ...) per ObjC calling convention.
 //
 
-.include "fractal/state_defs.s"
+.include "state_defs.s"
 
 .text
 .p2align 4

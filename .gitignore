@@ -3,9 +3,10 @@
 *.dSYM/
 
 # Executables
-sieve/primes
-neon_uppercase/neon_demo
-pure_asm/hello
+aarch64/sieve/primes
+aarch64/neon_uppercase/neon_demo
+aarch64/pure_asm/hello
+aarch64/fractal/cocoa_viewer
 
 # Windows leftovers
 *.obj

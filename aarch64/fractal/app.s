@@ -13,7 +13,7 @@
 //   9. [NSApp run] — never returns
 //
 
-.include "fractal/state_defs.s"
+.include "state_defs.s"
 
 .text
 .p2align 4

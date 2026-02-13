@@ -11,7 +11,7 @@
 //   _screen_to_complex — convert screen pixel to complex coordinate
 //
 
-.include "fractal/state_defs.s"
+.include "state_defs.s"
 
 .text
 .p2align 4
