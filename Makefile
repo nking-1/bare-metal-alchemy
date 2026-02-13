@@ -12,8 +12,9 @@ else
 endif
 
 FRACTAL_ASM = fractal/mandelbrot.s fractal/julia.s fractal/colormap.s
+COCOA_ASM = fractal/state.s fractal/render.s fractal/events.s fractal/app.s
 
-all: sieve/primes neon_uppercase/neon_demo pure_asm/hello fractal/fractal $(VIEWER_TARGET)
+all: sieve/primes neon_uppercase/neon_demo pure_asm/hello fractal/fractal $(VIEWER_TARGET) fractal/cocoa_viewer
 
 sieve/primes: sieve/sieve_main.c sieve/sieve.s
 	$(CC) $(CFLAGS) -o $@ $^
@@ -32,8 +33,11 @@ fractal/viewer: fractal/viewer.c $(FRACTAL_ASM)
 	$(CC) $(CFLAGS) $(SDL2_CFLAGS) -o $@ $^ $(SDL2_LIBS)
 endif
 
+fractal/cocoa_viewer: $(COCOA_ASM) $(FRACTAL_ASM)
+	$(CC) $(CFLAGS) -framework Cocoa -framework CoreGraphics -o $@ $^
+
 clean:
-	rm -f sieve/primes neon_uppercase/neon_demo pure_asm/hello fractal/fractal fractal/viewer
+	rm -f sieve/primes neon_uppercase/neon_demo pure_asm/hello fractal/fractal fractal/viewer fractal/cocoa_viewer
 	rm -rf *.dSYM */*.dSYM
 
 .PHONY: all clean
