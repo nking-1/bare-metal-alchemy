@@ -43,6 +43,6 @@
 
 // ── CGBitmapInfo ────────────────────────────────────────────
 
-.equ kCGImageAlphaNoneSkipFirst,    5
+.equ kCGImageAlphaNoneSkipFirst,    6
 .equ kCGBitmapByteOrder32Little,    0x2000
 .equ BITMAP_INFO, (kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little)
