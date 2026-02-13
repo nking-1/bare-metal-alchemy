@@ -584,13 +584,14 @@ _fv_scrollWheel:
     adrp    x20, _g_state@PAGE
     add     x20, x20, _g_state@PAGEOFF
 
-    // Get deltaY: [event deltaY] → d0
-    adrp    x0, _str_deltaY@PAGE
-    add     x0, x0, _str_deltaY@PAGEOFF
+    // Get scrollingDeltaY: [event scrollingDeltaY] → d0
+    // (deltaY returns 0.0 for precise scrolling devices like trackpads)
+    adrp    x0, _str_scrollingDeltaY@PAGE
+    add     x0, x0, _str_scrollingDeltaY@PAGEOFF
     bl      _sel_registerName
     mov     x1, x0
     mov     x0, x19
-    bl      _objc_msgSend               // d0 = deltaY
+    bl      _objc_msgSend               // d0 = scrollingDeltaY
     fmov    d8, d0                      // save deltaY
 
     // Get mouse location for cursor-centered zoom
@@ -616,21 +617,22 @@ _fv_scrollWheel:
     fmov    d11, d0                     // cx (point under cursor)
     fmov    d12, d1                     // cy
 
-    // Determine zoom factor
-    fcmp    d8, #0.0
-    b.le    .Lscroll_out
+    // Proportional zoom: factor = 1.0 + scrollingDeltaY * scale
+    adrp    x8, _const_scroll_scale@PAGE
+    ldr     d0, [x8, _const_scroll_scale@PAGEOFF]
+    fmul    d0, d8, d0                  // deltaY * scale
+    fmov    d1, #1.0
+    fadd    d0, d1, d0                  // factor = 1.0 + deltaY * scale
 
-    // Scroll up → zoom in, factor = 1.3
-    adrp    x8, _const_1_3@PAGE
-    ldr     d0, [x8, _const_1_3@PAGEOFF]
-    b       .Lscroll_apply
+    // Clamp factor to [0.5, 2.0] to prevent extreme jumps
+    adrp    x8, _const_0_5@PAGE
+    ldr     d1, [x8, _const_0_5@PAGEOFF]
+    fcmp    d0, d1
+    fcsel   d0, d1, d0, lt
+    fmov    d1, #2.0
+    fcmp    d0, d1
+    fcsel   d0, d1, d0, gt
 
-.Lscroll_out:
-    // Scroll down → zoom out, factor = 1/1.3
-    adrp    x8, _const_inv_1_3@PAGE
-    ldr     d0, [x8, _const_inv_1_3@PAGEOFF]
-
-.Lscroll_apply:
     // zoom *= factor
     ldr     d1, [x20, #VS_ZOOM]
     fmul    d1, d1, d0

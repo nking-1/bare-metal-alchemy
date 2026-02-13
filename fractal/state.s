@@ -172,6 +172,8 @@ _str_set:                                   .asciz "set"
 _str_locationInWindow:                      .asciz "locationInWindow"
 .globl _str_deltaY
 _str_deltaY:                                .asciz "deltaY"
+.globl _str_scrollingDeltaY
+_str_scrollingDeltaY:                       .asciz "scrollingDeltaY"
 .globl _str_keyCode
 _str_keyCode:                               .asciz "keyCode"
 .globl _str_buttonNumber
@@ -289,3 +291,6 @@ _const_1e6:         .double 1000000.0
 
 .globl _const_neg0_5
 _const_neg0_5:      .double -0.5
+
+.globl _const_scroll_scale
+_const_scroll_scale: .double 0.01
