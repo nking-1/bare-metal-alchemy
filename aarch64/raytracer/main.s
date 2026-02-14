@@ -215,6 +215,12 @@ _main:
     mov     x2, #80
     bl      _objc_msgSend
 
+    // [metalLayer setFramebufferOnly:NO] — required for compute shader writes
+    LOAD_SEL _str_setFramebufferOnly
+    mov     x0, x24
+    mov     x2, #0
+    bl      _objc_msgSend
+
     // [metalLayer setDrawableSize:CGSize(WIN_W, WIN_H)]
     LOAD_SEL _str_setDrawableSize
     mov     x0, x24
@@ -797,6 +803,7 @@ _str_setLayer:                  .asciz "setLayer:"
 _str_setDevice:                 .asciz "setDevice:"
 _str_setPixelFormat:            .asciz "setPixelFormat:"
 _str_setDrawableSize:           .asciz "setDrawableSize:"
+_str_setFramebufferOnly:        .asciz "setFramebufferOnly:"
 _str_newCommandQueue:           .asciz "newCommandQueue"
 _str_fileURLWithPath:           .asciz "fileURLWithPath:"
 _str_newLibraryWithURL:         .asciz "newLibraryWithURL:error:"
@@ -863,8 +870,8 @@ _light_a_color:     .single 1.0, 0.9, 0.7, 0.0     // warm white
 _light_b_color:     .single 0.5, 0.7, 1.0, 0.0     // cool blue
 _light_c_color:     .single 1.0, 0.8, 0.4, 0.0     // amber
 
-_camera_pos:        .single 0.0, 2.5, 4.0, 0.0
-_camera_look_at:    .single 0.0, 1.5, -3.0, 1.0    // .w = fov (1.0 rad ≈ 57°)
+_camera_pos:        .single 0.0, 2.5, 1.0, 0.0
+_camera_look_at:    .single 0.0, 1.0, -4.0, 1.2    // .w = fov (1.2 rad ≈ 69°)
 
 // ─── Scene data (9 shapes × 64 bytes each) ─────────────────────────
 // Each shape is 4 × float4:
