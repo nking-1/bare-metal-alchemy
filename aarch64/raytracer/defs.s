@@ -48,9 +48,24 @@
 .equ SHAPE_COLOR,       48
 .equ SHAPE_STRIDE,      64
 
-// Scene: 6 planes + 2 spheres + 1 box = 9 shapes
-.equ NUM_SCENE_SHAPES,  9
 .equ MAX_SHAPES,        16
+
+// ─── LightDef struct (64 bytes) — data-driven animated lights ─────
+// float4 color        .xyz = RGB, .w = intensity
+// float4 base_pos     .xyz = center/anchor position
+// float4 anim_params  .x = type (0-3), .y = speed, .z = radius/amplitude, .w = phase
+// float4 anim_extra   figure-8: .x = x_speed, .y = x_radius (else reserved)
+.equ LDEF_COLOR,        0
+.equ LDEF_BASE_POS,     16
+.equ LDEF_ANIM_PARAMS,  32
+.equ LDEF_ANIM_EXTRA,   48
+.equ LDEF_STRIDE,       64
+
+// Animation types
+.equ ANIM_STATIC,   0
+.equ ANIM_ORBIT,    1
+.equ ANIM_BOB,      2
+.equ ANIM_FIGURE8,  3
 
 // ─── LOAD_SEL macro ─────────────────────────────────────────────────
 // Registers a selector from a string label. Result in x1 (ready for msgSend).

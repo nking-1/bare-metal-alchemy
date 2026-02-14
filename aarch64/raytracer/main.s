@@ -349,12 +349,14 @@ _main:
     // time = 0 (already zeroed)
     // frame_count = 0 (already zeroed)
 
-    // num_shapes
-    mov     w8, #NUM_SCENE_SHAPES
+    // num_shapes (from scene)
+    adrp    x8, _scene_num_shapes@PAGE
+    ldr     w8, [x8, _scene_num_shapes@PAGEOFF]
     str     w8, [x23, #UNI_NUM_SHAPES]
 
-    // num_lights = 3
-    mov     w8, #3
+    // num_lights (from scene)
+    adrp    x8, _scene_num_lights@PAGE
+    ldr     w8, [x8, _scene_num_lights@PAGEOFF]
     str     w8, [x23, #UNI_NUM_LIGHTS]
 
     // resolution.xy as float4 (.xy = w, h)
@@ -365,16 +367,12 @@ _main:
     scvtf   s0, w8
     str     s0, [x23, #UNI_RESOLUTION + 4]
 
-    // camera_pos = (0, 2.5, 4, 0)
-    adrp    x8, _camera_pos@PAGE
-    add     x8, x8, _camera_pos@PAGEOFF
+    // camera (from scene: 2 × float4)
+    adrp    x8, _scene_camera@PAGE
+    add     x8, x8, _scene_camera@PAGEOFF
     ldr     q0, [x8]
     str     q0, [x23, #UNI_CAMERA_POS]
-
-    // camera_look_at = (0, 1.5, -3, fov=1.0)
-    adrp    x8, _camera_look_at@PAGE
-    add     x8, x8, _camera_look_at@PAGEOFF
-    ldr     q0, [x8]
+    ldr     q0, [x8, #16]
     str     q0, [x23, #UNI_CAMERA_LOOK_AT]
 
     // ════════════════════════════════════════════════════════════
@@ -387,9 +385,12 @@ _main:
     mov     x24, x0                             // scene raw pointer
 
     mov     x0, x24
-    adrp    x1, _scene_data@PAGE
-    add     x1, x1, _scene_data@PAGEOFF
-    mov     x2, #(SHAPE_STRIDE * NUM_SCENE_SHAPES)
+    adrp    x1, _scene_shapes@PAGE
+    add     x1, x1, _scene_shapes@PAGEOFF
+    adrp    x8, _scene_num_shapes@PAGE
+    ldr     w2, [x8, _scene_num_shapes@PAGEOFF]
+    mov     w8, #SHAPE_STRIDE
+    mul     w2, w2, w8
     bl      _memcpy
 
     // ════════════════════════════════════════════════════════════
@@ -403,8 +404,8 @@ _main:
 
     LOAD_SEL _str_stringWithUTF8String
     mov     x0, x23
-    adrp    x2, _str_window_title@PAGE
-    add     x2, x2, _str_window_title@PAGEOFF
+    adrp    x2, _scene_title@PAGE
+    add     x2, x2, _scene_title@PAGEOFF
     bl      _objc_msgSend
     mov     x23, x0                             // title NSString
 
@@ -509,6 +510,7 @@ _render_frame:
     stp     x23, x24, [sp, #-16]!
     stp     x25, x26, [sp, #-16]!
     stp     d8, d9, [sp, #-16]!
+    stp     d10, d11, [sp, #-16]!
 
     // ── Get uniforms raw pointer ────────────────────────────────
     LOAD_SEL _str_contents
@@ -529,123 +531,174 @@ _render_frame:
     add     w8, w8, #1
     str     w8, [x19, #UNI_FRAME_COUNT]
 
-    // ── Light A: horizontal orbit (warm white) ──────────────────
-    // pos = (cos(t)*4, 3.5, sin(t)*4 - 4, intensity=2.0)
-    fmov    d0, d8
-    bl      _cos
-    fmov    d9, d0                              // cos(t)
-    fmov    d0, d8
-    bl      _sin
-    // d0 = sin(t), d9 = cos(t)
+    // ── Animate lights from scene data ────────────────────────────
+    adrp    x8, _scene_num_lights@PAGE
+    ldr     w22, [x8, _scene_num_lights@PAGEOFF]    // w22 = lights remaining
 
-    fcvt    s1, d9
-    adrp    x8, _const_4f@PAGE
-    ldr     s2, [x8, _const_4f@PAGEOFF]
-    fmul    s1, s1, s2                          // cos(t)*4
-    str     s1, [x19, #UNI_LIGHTS + 0*LIGHT_STRIDE + 0]    // pos.x
+    adrp    x20, _scene_lights@PAGE
+    add     x20, x20, _scene_lights@PAGEOFF         // x20 = current LightDef
 
-    adrp    x8, _const_3_5f@PAGE
-    ldr     s1, [x8, _const_3_5f@PAGEOFF]
-    str     s1, [x19, #UNI_LIGHTS + 0*LIGHT_STRIDE + 4]    // pos.y = 3.5
+    add     x21, x19, #UNI_LIGHTS                   // x21 = current uniform Light
 
-    fcvt    s1, d0
-    adrp    x8, _const_4f@PAGE
-    ldr     s2, [x8, _const_4f@PAGEOFF]
-    fmul    s1, s1, s2                          // sin(t)*4
-    adrp    x8, _const_neg4f@PAGE
-    ldr     s2, [x8, _const_neg4f@PAGEOFF]
-    fadd    s1, s1, s2                          // -4
-    str     s1, [x19, #UNI_LIGHTS + 0*LIGHT_STRIDE + 8]    // pos.z
+.Llight_loop:
+    cbz     w22, .Llight_loop_done
 
-    adrp    x8, _const_2f@PAGE
-    ldr     s1, [x8, _const_2f@PAGEOFF]
-    str     s1, [x19, #UNI_LIGHTS + 0*LIGHT_STRIDE + 12]   // pos.w = intensity 2.0
+    // Write color (.xyz) to uniform
+    ldr     s0, [x20, #LDEF_COLOR]
+    str     s0, [x21, #LIGHT_COLOR]
+    ldr     s0, [x20, #LDEF_COLOR + 4]
+    str     s0, [x21, #LIGHT_COLOR + 4]
+    ldr     s0, [x20, #LDEF_COLOR + 8]
+    str     s0, [x21, #LIGHT_COLOR + 8]
 
-    // Light A color = (1.0, 0.9, 0.7, 0)
-    adrp    x8, _light_a_color@PAGE
-    add     x8, x8, _light_a_color@PAGEOFF
-    ldr     q0, [x8]
-    str     q0, [x19, #UNI_LIGHTS + 0*LIGHT_STRIDE + LIGHT_COLOR]
+    // Load animation type
+    ldr     s0, [x20, #LDEF_ANIM_PARAMS]
+    fcvtzs  w8, s0
 
-    // ── Light B: bobs up/down (cool blue) ───────────────────────
-    // pos = (-3, 2+sin(t*0.7)*1.5, -5, intensity=1.5)
-    fmov    d0, d8
-    adrp    x8, _const_0_7@PAGE
-    ldr     d1, [x8, _const_0_7@PAGEOFF]
-    fmul    d0, d0, d1
-    bl      _sin
-    fcvt    s0, d0                              // sin(t*0.7)
-    adrp    x8, _const_1_5f@PAGE
-    ldr     s1, [x8, _const_1_5f@PAGEOFF]
-    fmul    s0, s0, s1                          // *1.5
-    adrp    x8, _const_2f@PAGE
-    ldr     s1, [x8, _const_2f@PAGEOFF]
-    fadd    s0, s0, s1                          // 2 + ...
+    cbz     w8, .Llight_static
+    cmp     w8, #ANIM_ORBIT
+    b.eq    .Llight_orbit
+    cmp     w8, #ANIM_BOB
+    b.eq    .Llight_bob
+    cmp     w8, #ANIM_FIGURE8
+    b.eq    .Llight_figure8
+    b       .Llight_static                           // fallback
 
-    adrp    x8, _const_neg3f@PAGE
-    ldr     s1, [x8, _const_neg3f@PAGEOFF]
-    str     s1, [x19, #UNI_LIGHTS + 1*LIGHT_STRIDE + 0]    // x = -3
-    str     s0, [x19, #UNI_LIGHTS + 1*LIGHT_STRIDE + 4]    // y
-    adrp    x8, _const_neg5f@PAGE
-    ldr     s1, [x8, _const_neg5f@PAGEOFF]
-    str     s1, [x19, #UNI_LIGHTS + 1*LIGHT_STRIDE + 8]    // z = -5
-    adrp    x8, _const_1_5f@PAGE
-    ldr     s1, [x8, _const_1_5f@PAGEOFF]
-    str     s1, [x19, #UNI_LIGHTS + 1*LIGHT_STRIDE + 12]   // intensity = 1.5
+.Llight_static:
+    // pos = base_pos
+    ldr     s0, [x20, #LDEF_BASE_POS]
+    str     s0, [x21, #LIGHT_POS]
+    ldr     s0, [x20, #LDEF_BASE_POS + 4]
+    str     s0, [x21, #LIGHT_POS + 4]
+    ldr     s0, [x20, #LDEF_BASE_POS + 8]
+    str     s0, [x21, #LIGHT_POS + 8]
+    ldr     s0, [x20, #LDEF_COLOR + 12]
+    str     s0, [x21, #LIGHT_POS + 12]              // intensity
+    b       .Llight_next
 
-    // Light B color
-    adrp    x8, _light_b_color@PAGE
-    add     x8, x8, _light_b_color@PAGEOFF
-    ldr     q0, [x8]
-    str     q0, [x19, #UNI_LIGHTS + 1*LIGHT_STRIDE + LIGHT_COLOR]
+.Llight_orbit:
+    // pos.x = base.x + cos(t*speed+phase)*radius
+    // pos.y = base.y
+    // pos.z = base.z + sin(t*speed+phase)*radius
+    ldr     s0, [x20, #LDEF_ANIM_PARAMS + 4]        // speed
+    fcvt    d0, s0
+    fmul    d0, d8, d0                               // t*speed
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 12]       // phase
+    fcvt    d1, s1
+    fadd    d9, d0, d1                               // d9 = angle
 
-    // ── Light C: figure-8 near ceiling (amber) ──────────────────
-    // pos = (sin(t*1.3)*3, 4.5, sin(t*0.9)*cos(t*0.9)*4 - 4, intensity=1.0)
-    fmov    d0, d8
-    adrp    x8, _const_1_3@PAGE
-    ldr     d1, [x8, _const_1_3@PAGEOFF]
-    fmul    d0, d0, d1
-    bl      _sin
-    fcvt    s0, d0
-    adrp    x8, _const_3f@PAGE
-    ldr     s1, [x8, _const_3f@PAGEOFF]
-    fmul    s0, s0, s1                          // sin(t*1.3)*3
-    str     s0, [x19, #UNI_LIGHTS + 2*LIGHT_STRIDE + 0]    // x
-
-    adrp    x8, _const_4_5f@PAGE
-    ldr     s0, [x8, _const_4_5f@PAGEOFF]
-    str     s0, [x19, #UNI_LIGHTS + 2*LIGHT_STRIDE + 4]    // y = 4.5
-
-    // z = sin(t*0.9)*cos(t*0.9)*4 - 4 = sin(2*t*0.9)/2 * 4 - 4
-    // Just compute sin and cos separately
-    fmov    d0, d8
-    adrp    x8, _const_0_9@PAGE
-    ldr     d1, [x8, _const_0_9@PAGEOFF]
-    fmul    d0, d0, d1
-    fmov    d9, d0                              // save t*0.9
-    bl      _sin
-    fmov    d8, d0                              // sin(t*0.9) — reuse d8, we're done with time
     fmov    d0, d9
     bl      _cos
-    fmul    d0, d0, d8                          // sin*cos
-    fcvt    s0, d0
-    adrp    x8, _const_4f@PAGE
-    ldr     s1, [x8, _const_4f@PAGEOFF]
-    fmul    s0, s0, s1
-    adrp    x8, _const_neg4f@PAGE
-    ldr     s1, [x8, _const_neg4f@PAGEOFF]
-    fadd    s0, s0, s1
-    str     s0, [x19, #UNI_LIGHTS + 2*LIGHT_STRIDE + 8]    // z
+    fmov    d10, d0                                  // d10 = cos(angle)
 
-    adrp    x8, _const_1f@PAGE
-    ldr     s0, [x8, _const_1f@PAGEOFF]
-    str     s0, [x19, #UNI_LIGHTS + 2*LIGHT_STRIDE + 12]   // intensity = 1.0
+    fmov    d0, d9
+    bl      _sin                                     // d0 = sin(angle)
 
-    // Light C color
-    adrp    x8, _light_c_color@PAGE
-    add     x8, x8, _light_c_color@PAGEOFF
-    ldr     q0, [x8]
-    str     q0, [x19, #UNI_LIGHTS + 2*LIGHT_STRIDE + LIGHT_COLOR]
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 8]        // radius
+    fcvt    s2, d10
+    fmul    s2, s2, s1
+    ldr     s3, [x20, #LDEF_BASE_POS]
+    fadd    s2, s2, s3
+    str     s2, [x21, #LIGHT_POS]                    // pos.x
+
+    ldr     s3, [x20, #LDEF_BASE_POS + 4]
+    str     s3, [x21, #LIGHT_POS + 4]                // pos.y
+
+    fcvt    s2, d0
+    fmul    s2, s2, s1
+    ldr     s3, [x20, #LDEF_BASE_POS + 8]
+    fadd    s2, s2, s3
+    str     s2, [x21, #LIGHT_POS + 8]                // pos.z
+
+    ldr     s2, [x20, #LDEF_COLOR + 12]
+    str     s2, [x21, #LIGHT_POS + 12]               // intensity
+    b       .Llight_next
+
+.Llight_bob:
+    // pos.x = base.x
+    // pos.y = base.y + sin(t*speed+phase)*amplitude
+    // pos.z = base.z
+    ldr     s0, [x20, #LDEF_ANIM_PARAMS + 4]        // speed
+    fcvt    d0, s0
+    fmul    d0, d8, d0
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 12]       // phase
+    fcvt    d1, s1
+    fadd    d0, d0, d1
+    bl      _sin
+
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 8]        // amplitude
+    fcvt    s2, d0
+    fmul    s2, s2, s1
+
+    ldr     s3, [x20, #LDEF_BASE_POS]
+    str     s3, [x21, #LIGHT_POS]
+    ldr     s3, [x20, #LDEF_BASE_POS + 4]
+    fadd    s3, s3, s2
+    str     s3, [x21, #LIGHT_POS + 4]
+    ldr     s3, [x20, #LDEF_BASE_POS + 8]
+    str     s3, [x21, #LIGHT_POS + 8]
+
+    ldr     s2, [x20, #LDEF_COLOR + 12]
+    str     s2, [x21, #LIGHT_POS + 12]
+    b       .Llight_next
+
+.Llight_figure8:
+    // x = base.x + sin(t*x_speed+phase)*x_radius    (from anim_extra)
+    // y = base.y
+    // z = base.z + sin(t*z_speed)*cos(t*z_speed)*z_radius  (from anim_params)
+    ldr     s0, [x20, #LDEF_ANIM_EXTRA]             // x_speed
+    fcvt    d0, s0
+    fmul    d0, d8, d0                               // t*x_speed
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 12]       // phase
+    fcvt    d1, s1
+    fadd    d0, d0, d1
+    bl      _sin
+    fmov    d10, d0                                  // d10 = sin(t*x_speed+phase)
+
+    // z component
+    ldr     s0, [x20, #LDEF_ANIM_PARAMS + 4]        // z_speed
+    fcvt    d0, s0
+    fmul    d9, d8, d0                               // d9 = t*z_speed
+
+    fmov    d0, d9
+    bl      _sin
+    fmov    d11, d0                                  // d11 = sin(t*z_speed)
+
+    fmov    d0, d9
+    bl      _cos
+    fmul    d0, d0, d11                              // sin*cos
+
+    // Write x
+    ldr     s1, [x20, #LDEF_ANIM_EXTRA + 4]         // x_radius
+    fcvt    s2, d10
+    fmul    s2, s2, s1
+    ldr     s3, [x20, #LDEF_BASE_POS]
+    fadd    s2, s2, s3
+    str     s2, [x21, #LIGHT_POS]
+
+    // Write y
+    ldr     s3, [x20, #LDEF_BASE_POS + 4]
+    str     s3, [x21, #LIGHT_POS + 4]
+
+    // Write z
+    ldr     s1, [x20, #LDEF_ANIM_PARAMS + 8]        // z_radius
+    fcvt    s2, d0
+    fmul    s2, s2, s1
+    ldr     s3, [x20, #LDEF_BASE_POS + 8]
+    fadd    s2, s2, s3
+    str     s2, [x21, #LIGHT_POS + 8]
+
+    ldr     s2, [x20, #LDEF_COLOR + 12]
+    str     s2, [x21, #LIGHT_POS + 12]
+    b       .Llight_next
+
+.Llight_next:
+    add     x20, x20, #LDEF_STRIDE
+    add     x21, x21, #LIGHT_STRIDE
+    sub     w22, w22, #1
+    b       .Llight_loop
+
+.Llight_loop_done:
 
     // ── Get next drawable ───────────────────────────────────────
     LOAD_SEL _str_nextDrawable
@@ -746,6 +799,7 @@ _render_frame:
     bl      _objc_msgSend
 
 .Lrender_done:
+    ldp     d10, d11, [sp], #16
     ldp     d8, d9, [sp], #16
     ldp     x25, x26, [sp], #16
     ldp     x23, x24, [sp], #16
@@ -836,104 +890,16 @@ _enc_bool:      .asciz "c@:@"
 // Paths / names
 _str_metallib_path: .asciz "raytrace.metallib"
 _str_kernel_name:   .asciz "raytrace_kernel"
-_str_window_title:  .asciz "Metal Ray Tracer"
 
 // ─── Float constants ────────────────────────────────────────────────
 .section __TEXT,__literal4,4byte_literals
 .p2align 2
 
-_const_1f:      .single 1.0
-_const_2f:      .single 2.0
-_const_3f:      .single 3.0
-_const_4f:      .single 4.0
-_const_1_5f:    .single 1.5
-_const_3_5f:    .single 3.5
-_const_4_5f:    .single 4.5
-_const_neg3f:   .single -3.0
-_const_neg4f:   .single -4.0
-_const_neg5f:   .single -5.0
 _const_dt:      .single 0.016666666             // ~1/60s per frame tick
 
 .section __TEXT,__literal8,8byte_literals
 .p2align 3
 
 _const_timer_interval:  .double 0.008333333     // ~120 Hz
-_const_0_7:             .double 0.7
-_const_0_9:             .double 0.9
-_const_1_3:             .double 1.3
-
-// ─── Float4 constants (16 bytes each) ───────────────────────────────
-.section __TEXT,__const
-.p2align 4
-
-_light_a_color:     .single 1.0, 0.9, 0.7, 0.0     // warm white
-_light_b_color:     .single 0.5, 0.7, 1.0, 0.0     // cool blue
-_light_c_color:     .single 1.0, 0.8, 0.4, 0.0     // amber
-
-_camera_pos:        .single 0.0, 2.5, 1.0, 0.0
-_camera_look_at:    .single 0.0, 1.0, -4.0, 1.2    // .w = fov (1.2 rad ≈ 69°)
-
-// ─── Scene data (9 shapes × 64 bytes each) ─────────────────────────
-// Each shape is 4 × float4:
-//   type_info: (type, roughness, reflectivity, 0)
-//   position:  (x, y, z, 0)
-//   size:      (sx, sy, sz, 0)    [radius/half-ext/normal]
-//   color:     (r, g, b, 0)
-.p2align 4
-
-_scene_data:
-    // 0: Floor (plane at y=0, normal up)
-    .single 2.0, 0.8, 0.15, 0.0        // type=plane, rough, refl
-    .single 0.0, 0.0, 0.0, 0.0         // point on plane
-    .single 0.0, 1.0, 0.0, 0.0         // normal (up)
-    .single 0.5, 0.5, 0.5, 0.0         // gray
-
-    // 1: Ceiling (y=5, normal down)
-    .single 2.0, 0.95, 0.0, 0.0
-    .single 0.0, 5.0, 0.0, 0.0
-    .single 0.0, -1.0, 0.0, 0.0
-    .single 0.8, 0.8, 0.8, 0.0
-
-    // 2: Back wall (z=-10, normal toward camera)
-    .single 2.0, 0.9, 0.0, 0.0
-    .single 0.0, 0.0, -10.0, 0.0
-    .single 0.0, 0.0, 1.0, 0.0
-    .single 0.7, 0.7, 0.7, 0.0
-
-    // 3: Left wall (x=-6, normal right, red tint)
-    .single 2.0, 0.85, 0.0, 0.0
-    .single -6.0, 0.0, 0.0, 0.0
-    .single 1.0, 0.0, 0.0, 0.0
-    .single 0.8, 0.2, 0.2, 0.0
-
-    // 4: Right wall (x=6, normal left, green tint)
-    .single 2.0, 0.85, 0.0, 0.0
-    .single 6.0, 0.0, 0.0, 0.0
-    .single -1.0, 0.0, 0.0, 0.0
-    .single 0.2, 0.8, 0.2, 0.0
-
-    // 5: Front wall (z=2, behind camera)
-    .single 2.0, 0.9, 0.0, 0.0
-    .single 0.0, 0.0, 2.0, 0.0
-    .single 0.0, 0.0, -1.0, 0.0
-    .single 0.7, 0.7, 0.7, 0.0
-
-    // 6: Large sphere (center, reflective)
-    .single 0.0, 0.1, 0.8, 0.0         // type=sphere, smooth, very reflective
-    .single 0.0, 1.5, -4.0, 0.0        // center
-    .single 1.5, 0.0, 0.0, 0.0         // radius = 1.5
-    .single 0.9, 0.9, 0.95, 0.0        // near-white
-
-    // 7: Small sphere (offset, matte orange)
-    .single 0.0, 0.7, 0.05, 0.0
-    .single -2.5, 0.8, -2.5, 0.0
-    .single 0.8, 0.0, 0.0, 0.0         // radius = 0.8
-    .single 0.9, 0.3, 0.1, 0.0
-
-    // 8: Box (right side, blue)
-    .single 1.0, 0.3, 0.4, 0.0         // type=box
-    .single 3.0, 1.0, -5.0, 0.0        // center
-    .single 1.0, 1.0, 1.0, 0.0         // half-extents
-    .single 0.3, 0.5, 0.9, 0.0         // blue
 
 .end

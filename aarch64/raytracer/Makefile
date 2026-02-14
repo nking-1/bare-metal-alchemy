@@ -1,5 +1,6 @@
 CC = clang
 CFLAGS = -O2 -Wall
+SCENE ?= cornell
 
 .PHONY: all clean run shader
 
@@ -12,8 +13,8 @@ raytrace.metallib: raytrace.metal
 	xcrun -sdk macosx metallib raytrace.air -o raytrace.metallib
 	rm -f raytrace.air
 
-metal_rt_demo: main.s defs.s
-	$(CC) $(CFLAGS) -o $@ main.s \
+metal_rt_demo: main.s defs.s scenes/$(SCENE).s
+	$(CC) $(CFLAGS) -o $@ main.s scenes/$(SCENE).s \
 		-framework Metal \
 		-framework AppKit \
 		-framework QuartzCore \
